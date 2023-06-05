@@ -5,7 +5,7 @@ import {
   useDisclosure,
   useToast,
 } from "@chakra-ui/react";
-import { ChangeEvent, FormEvent, useReducer } from "react";
+import { ChangeEvent, FormEvent, useReducer, useState } from "react";
 
 import { useLazyQuery, useMutation, useQuery } from "@apollo/client";
 import { Tooltip } from "@chakra-ui/react";
@@ -39,7 +39,8 @@ const App = () => {
   const [createPodcast] = useMutation(Operations.Mutations.CreatePodcast);
   const [updateColor] = useMutation(Operations.Mutations.UpdateColor);
   const [deletePodcast] = useMutation(Operations.Mutations.DeletePodcast);
-
+  const [offset, setOffset] = useState(1);
+  const [displayScrub, setDisplayScrub] = useState(false);
   const { data, refetch: refetchPodcasts } = useQuery(
     Operations.Queries.GetPodcasts
   );
@@ -77,7 +78,8 @@ const App = () => {
   const handleSelectPodcast = async (
     e: FormEvent<HTMLButtonElement> | FormEvent<HTMLFormElement>,
     preview: string,
-    existingPodcast: boolean
+    existingPodcast: boolean,
+    offset: number
   ) => {
     e.preventDefault();
     const podcastTitleList = podcasts.map((podcast: any) => {
@@ -90,6 +92,7 @@ const App = () => {
     dispatch({ type: REDUCER_ACTION_TYPE.SELECT_PODCAST, payload: preview });
 
     if (existingPodcast) {
+      setDisplayScrub(false);
       dispatch({
         type: REDUCER_ACTION_TYPE.TOGGLE_EXISTING_PODCAST,
         payload: true,
@@ -113,7 +116,7 @@ const App = () => {
         /* Fetching new podcast */
         fetchSpotify({
           variables: {
-            input: { podcast: preview },
+            input: { podcast: preview, offset },
           },
         }),
         /* Fetching existing podcast */
@@ -144,6 +147,9 @@ const App = () => {
           });
         }
         const fetchedSpotifyName = result[0].data.fetchSpotifyPodcast[0].name;
+        if (!existingPodcast) {
+          setDisplayScrub(true);
+        }
 
         if (!existingPodcast && state.text === state.podcast) {
           dispatch({
@@ -378,12 +384,17 @@ const App = () => {
       {/* Category */}
 
       <div className="flex w-full relative items-center justify-center">
-        {spotifyPodcast.spotifyName && state.display.title && (
-          <h2 className="text-white absolute flex items-center gap-5 font-semibold top-[-115px] text-lg sm:text-2xl lg:text-xl mb-4 ">
-            {capitalizeString(state.currentPodcast.category)}
-            <AiFillEdit onClick={onOpenEditCategory} />
-          </h2>
-        )}
+        {spotifyPodcast.spotifyName &&
+          state.display.title &&
+          !state.display.submit && (
+            <h2 className="text-white absolute flex items-center gap-5 font-semibold top-[-115px] text-lg sm:text-2xl lg:text-xl mb-4 ">
+              {capitalizeString(state.currentPodcast.category)}
+              <AiFillEdit
+                onClick={onOpenEditCategory}
+                className="cursor-pointer"
+              />
+            </h2>
+          )}
       </div>
 
       {/* Image Color Extraction */}
@@ -408,33 +419,57 @@ const App = () => {
       )}
 
       <form
-        onSubmit={(e) => handleSelectPodcast(e, state.text, false)}
+        onSubmit={(e) => handleSelectPodcast(e, state.text, false, 0)}
         className="w-[500px] flex flex-col justify-center items-center mb-4 h-[500px]"
       >
+        {state.display.submit ||
+          (state.isExistingPodcast && (
+            <Tooltip label="Edit Offer" placement={"end"}>
+              <div
+                className="relative w-fit  text-white z-1 hover:cursor-pointer"
+                onClick={() => handleDetails()}
+              >
+                <p className="font-bold mt-2">Edit Offer</p>
+              </div>
+            </Tooltip>
+          ))}
         <VStack spacing={5} className="h-full">
-          <div className="flex-col h-[80px] items-center justify-center text-center">
-            <Input
-              type="text"
-              value={state.text}
-              w={200}
-              color={"white"}
-              placeholder={"Search Podcast Title"}
-              onChange={(e) => handlePodcastInputChange(e)}
-              mt={10}
-              zIndex={10}
-              pos="relative"
-            />
-            {state.display.submit ||
-              (state.isExistingPodcast && (
-                <Tooltip label="Edit Offer" placement={"end"}>
-                  <div className="relative w-[40px] left-[260px] bottom-8 text-white z-1 hover:cursor-pointer">
-                    <AiOutlineEllipsis
-                      size="40px"
-                      onClick={() => handleDetails()}
-                    />
-                  </div>
-                </Tooltip>
-              ))}
+          <div className="flex-col h-[80px] items-center justify-center text-center ">
+            <div className="flex gap-2 justify-center w-full mt-10">
+              <Input
+                type="text"
+                value={state.text}
+                w={200}
+                color={"white"}
+                placeholder={"Search Podcast Title"}
+                onChange={(e) => handlePodcastInputChange(e)}
+                zIndex={10}
+              />
+            </div>
+            {displayScrub && (
+              <Button
+                colorScheme="black"
+                className="relative bottom-10 left-[180px] active:scale-95"
+                onClick={(e) => {
+                  setOffset((prev) => prev + 1);
+                  handleSelectPodcast(e, state.text, false, offset);
+                }}
+              >
+                NEXT
+              </Button>
+            )}
+            {displayScrub && (
+              <Button
+                colorScheme="black"
+                className="relative bottom-10 right-[180px] active:scale-95"
+                onClick={(e) => {
+                  setOffset((prev) => prev - 1);
+                  handleSelectPodcast(e, state.text, false, offset);
+                }}
+              >
+                PREV
+              </Button>
+            )}
             <div className="w-[300px] bg-[#12121] flex flex-col items-center mt-10">
               <ul className="text-center">
                 {state.text &&
@@ -442,7 +477,9 @@ const App = () => {
                   fusePreview?.map((preview: string) => (
                     <li key={preview}>
                       <Button
-                        onClick={(e) => handleSelectPodcast(e, preview, true)}
+                        onClick={(e) =>
+                          handleSelectPodcast(e, preview, true, 0)
+                        }
                         margin={1}
                       >
                         {preview}
